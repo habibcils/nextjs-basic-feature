@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Learn Next.js - Modern Admin Dashboard
 
 Aplikasi Dashboard Admin modern yang dibangun menggunakan **Next.js (App Router)**, **Ant Design**, **Zustand**, dan sistem autentikasi aman berbasis **Secure HttpOnly Cookies**.
@@ -115,3 +116,6 @@ Buka browser dan akses: [http://localhost:3000](http://localhost:3000)
 npm run build
 npm run start
 ```
+=======
+# nextjs-basic-feature
+>>>>>>> dc1ec8abcadaa44d83e6785c524f576310e97417
