@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '@/store/useAuthStore';
+import { topProgress } from '@/components/common/TopProgressBar';
 
 const { Sider } = Layout;
 
@@ -44,7 +45,10 @@ export default function AppSidebar() {
   const activeKey = menuItems.find((item) => pathname.startsWith(item?.key as string))?.key as string || '/dashboard';
 
   const handleMenuClick: MenuProps['onClick'] = (e) => {
-    router.push(e.key);
+    if (pathname !== e.key) {
+      topProgress.start();
+      router.push(e.key);
+    }
   };
 
   return (

@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '@/store/useAuthStore';
+import { topProgress } from '@/components/common/TopProgressBar';
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -67,7 +68,10 @@ export default function AppTopbar() {
       key: 'settings',
       icon: <SettingOutlined />,
       label: 'Pengaturan Akun',
-      onClick: () => router.push('/settings'),
+      onClick: () => {
+        topProgress.start();
+        router.push('/settings');
+      },
     },
     {
       type: 'divider',

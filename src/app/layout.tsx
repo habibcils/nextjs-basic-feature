@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import AntdProvider from '@/components/providers/AntdProvider';
 import InitialLoaderRemover from '@/components/common/InitialLoaderRemover';
+import TopProgressBar from '@/components/common/TopProgressBar';
 
 export const metadata: Metadata = {
   title: 'Learn Next.js - Modern Admin Dashboard',
@@ -121,6 +123,11 @@ export default function RootLayout({
 
         {/* Komponen yang otomatis menghapus loader ketika React selesai hydrate */}
         <InitialLoaderRemover />
+
+        {/* Loading bar garis di bagian paling atas saat berpindah halaman */}
+        <Suspense fallback={null}>
+          <TopProgressBar />
+        </Suspense>
 
         <AntdProvider>{children}</AntdProvider>
       </body>
