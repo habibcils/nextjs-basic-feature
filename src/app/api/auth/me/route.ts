@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { AUTH_COOKIE_NAME, MOCK_USERS, getUserWithoutPassword } from '@/lib/auth';
+import axios from 'axios';
+import { AUTH_COOKIE_NAME } from '@/lib/auth';
+import { DummyAuthUser } from '@/services/api/auth/authApi';
+import { UserProfile } from '@/types/auth';
 
 export async function GET() {
   try {
@@ -14,41 +17,35 @@ export async function GET() {
       );
     }
 
-    try {
-      const decodedJson = Buffer.from(token, 'base64').toString('utf-8');
-      const payload = JSON.parse(decodedJson);
+    // Verifikasi token rahasia ke DummyJSON /auth/me
+    const response = await axios.get<DummyAuthUser>('https://dummyjson.com/auth/me', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-      if (payload.exp && Date.now() > payload.exp) {
-        return NextResponse.json(
-          { success: false, message: 'Sesi telah kedaluwarsa' },
-          { status: 401 }
-        );
-      }
+    const dummyUser = response.data;
+    const normalUserData: UserProfile = {
+      id: dummyUser.id,
+      username: dummyUser.username,
+      name: `${dummyUser.firstName} ${dummyUser.lastName}`,
+      email: dummyUser.email,
+      firstName: dummyUser.firstName,
+      lastName: dummyUser.lastName,
+      gender: dummyUser.gender,
+      avatar: dummyUser.image,
+      role: 'admin',
+    };
 
-      const user = MOCK_USERS.find((u) => u.id === payload.userId);
-      if (!user) {
-        return NextResponse.json(
-          { success: false, message: 'Pengguna tidak ditemukan' },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        user: getUserWithoutPassword(user),
-      });
-    } catch {
-      return NextResponse.json(
-        { success: false, message: 'Token tidak valid' },
-        { status: 401 }
-      );
-    }
-  } catch (error) {
-    console.error('Session error:', error);
+    return NextResponse.json({
+      success: true,
+      user: normalUserData,
+    });
+  } catch (error: any) {
+    console.error('Session verification error:', error?.response?.data || error?.message);
     return NextResponse.json(
-      { success: false, message: 'Server error' },
-      { status: 500 }
+      { success: false, message: 'Token kedaluwarsa atau tidak valid' },
+      { status: 401 }
     );
   }
 }
-

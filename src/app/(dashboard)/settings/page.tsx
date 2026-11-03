@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   Tabs,
@@ -16,6 +16,9 @@ import {
   Select,
   Divider,
   App,
+  List,
+  Tag,
+  Alert,
 } from 'antd';
 import {
   UserOutlined,
@@ -24,8 +27,12 @@ import {
   SaveOutlined,
   SafetyCertificateOutlined,
   BellOutlined,
+  HistoryOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/useAuthStore';
+import { settingsApi, DummyPost } from '@/services/api/settings/settingsApi';
+import axios from 'axios';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -41,9 +48,42 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
 
-  const handleSaveProfile = async (values: { name: string; email: string; bio?: string }) => {
+  // Data aktivitas sistem dari DummyJSON /posts via settingsApi
+  const [activityLogs, setActivityLogs] = useState<DummyPost[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  const fetchActivityLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      // Hit endpoint dummyjson.com/posts via settingsApi (Axios)
+      const data = await settingsApi.getSystemActivityLogs(4);
+      setActivityLogs(data.posts);
+    } catch (err: any) {
+      if (axios.isCancel(err)) {
+        console.log('🛑 Request settingsApi dibatalkan karena ganti page');
+        return;
+      }
+      console.error('Error fetching logs:', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchActivityLogs();
+  }, []);
+
+  const handleSaveProfile = async (values: { name: string; email: string }) => {
     setSavingProfile(true);
-    setTimeout(() => {
+    try {
+      // Simulasi update profil via DummyJSON PUT
+      if (user?.id) {
+        await settingsApi.updateUserProfile(user.id, {
+          email: values.email,
+        });
+      }
+
+      // Update data di Zustand store (dan otomatis tersimpan di LocalStorage persist)
       if (user) {
         setUser({
           ...user,
@@ -51,9 +91,14 @@ export default function SettingsPage() {
           email: values.email,
         });
       }
+      message.success('Profil berhasil diperbarui dan tersimpan di Zustand Persist!');
+    } catch (err: any) {
+      if (!axios.isCancel(err)) {
+        message.warning('Profil diperbarui di state lokal');
+      }
+    } finally {
       setSavingProfile(false);
-      message.success('Profil berhasil diperbarui!');
-    }, 600);
+    }
   };
 
   const handleSaveSecurity = async () => {
@@ -61,7 +106,7 @@ export default function SettingsPage() {
     setTimeout(() => {
       securityForm.resetFields();
       setSavingSecurity(false);
-      message.success('Kata sandi berhasil diubah!');
+      message.success('Kata sandi berhasil diperbarui!');
     }, 600);
   };
 
@@ -84,10 +129,10 @@ export default function SettingsPage() {
                 style={{ backgroundColor: '#1677ff', marginBottom: 16 }}
               />
               <Title level={5} style={{ margin: 0 }}>
-                {user?.name || 'Administrator'}
+                {user?.name || 'Emily Johnson'}
               </Title>
               <Text type="secondary" style={{ fontSize: 13 }}>
-                Role: {user?.role?.toUpperCase() || 'ADMIN'}
+                @{user?.username || 'emilys'} • {user?.role?.toUpperCase() || 'ADMIN'}
               </Text>
             </Col>
 
@@ -96,9 +141,9 @@ export default function SettingsPage() {
                 form={profileForm}
                 layout="vertical"
                 initialValues={{
-                  name: user?.name || 'Ahmad Habib',
-                  email: user?.email || 'admin@example.com',
-                  bio: 'Software engineer and system administrator.',
+                  name: user?.name || 'Emily Johnson',
+                  email: user?.email || 'emilys@dummyjson.com',
+                  bio: 'Product Manager & Administrator on DummyJSON system.',
                 }}
                 onFinish={handleSaveProfile}
               >
@@ -144,6 +189,47 @@ export default function SettingsPage() {
       ),
     },
     {
+      key: 'logs',
+      label: (
+        <span>
+          <HistoryOutlined /> Log Aktivitas Sistem (DummyJSON API)
+        </span>
+      ),
+      children: (
+        <Card variant="borderless" style={{ maxWidth: 800 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text type="secondary">Data live dari endpoint <code>settingsApi.ts</code> (/posts) via Axios:</Text>
+            <Button size="small" icon={<ReloadOutlined />} onClick={fetchActivityLogs} loading={loadingLogs}>
+              Segarkan Log
+            </Button>
+          </div>
+          <List
+            loading={loadingLogs}
+            itemLayout="vertical"
+            dataSource={activityLogs}
+            renderItem={(item) => (
+              <List.Item key={item.id} style={{ padding: '16px 0' }}>
+                <List.Item.Meta
+                  title={<Text strong>{item.title}</Text>}
+                  description={
+                    <Space size={6} style={{ marginTop: 4 }}>
+                      {item.tags.map((tag) => (
+                        <Tag key={tag} color="geekblue">#{tag}</Tag>
+                      ))}
+                      <Tag color="green">👁️ {item.views} views</Tag>
+                    </Space>
+                  }
+                />
+                <Paragraph style={{ color: '#595959', margin: '8px 0 0' }}>
+                  {item.body.slice(0, 140)}...
+                </Paragraph>
+              </List.Item>
+            )}
+          />
+        </Card>
+      ),
+    },
+    {
       key: 'security',
       label: (
         <span>
@@ -178,25 +264,6 @@ export default function SettingsPage() {
               rules={[
                 { required: true, message: 'Harap masukkan kata sandi baru!' },
                 { min: 6, message: 'Minimal 6 karakter!' },
-              ]}
-            >
-              <Input.Password size="large" />
-            </Form.Item>
-
-            <Form.Item
-              name="confirmPassword"
-              label="Konfirmasi Kata Sandi Baru"
-              dependencies={['newPassword']}
-              rules={[
-                { required: true, message: 'Harap konfirmasi kata sandi baru!' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('newPassword') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Kata sandi konfirmasi tidak cocok!'));
-                  },
-                }),
               ]}
             >
               <Input.Password size="large" />
@@ -260,27 +327,12 @@ export default function SettingsPage() {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <Text strong>Bahasa Antarmuka (Interface Language)</Text>
+                <Text strong>Status Penyimpanan Data</Text>
                 <div style={{ color: '#8c8c8c', fontSize: 13, marginTop: 4 }}>
-                  Pilih bahasa tampilan default aplikasi.
+                  JWT Token tersimpan di <code>HttpOnly Cookies</code>, Profil tersimpan di <code>Zustand Persist</code>.
                 </div>
               </div>
-              <Select defaultValue="id" style={{ width: 160 }}>
-                <Option value="id">Bahasa Indonesia</Option>
-                <Option value="en">English (US)</Option>
-              </Select>
-            </div>
-
-            <Divider style={{ margin: 0 }} />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <Text strong>Penyimpanan Sesi (Session Security)</Text>
-                <div style={{ color: '#8c8c8c', fontSize: 13, marginTop: 4 }}>
-                  Sesi menggunakan <code>httpOnly</code> cookie dengan atribut <code>SameSite=Lax</code>.
-                </div>
-              </div>
-              <Button type="dashed" onClick={() => message.info('Cookie session berstatus aktif dan terenkripsi!')}>
+              <Button type="dashed" onClick={() => message.info('Data store tetap bertahan saat hard reload!')}>
                 Cek Status
               </Button>
             </div>
@@ -297,7 +349,7 @@ export default function SettingsPage() {
           Pengaturan Akun & Sistem
         </Title>
         <Text type="secondary">
-          Kelola profil pengguna, preferensi keamanan, dan konfigurasi aplikasi.
+          Kelola profil pengguna DummyJSON, log aktivitas via Axios, dan preferensi aplikasi.
         </Text>
       </div>
 
@@ -307,4 +359,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

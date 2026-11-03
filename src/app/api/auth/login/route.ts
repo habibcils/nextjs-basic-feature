@@ -1,64 +1,89 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { AUTH_COOKIE_NAME, findUserByEmail, getUserWithoutPassword } from '@/lib/auth';
+import axios from 'axios';
+import { AUTH_COOKIE_NAME, REFRESH_COOKIE_NAME } from '@/lib/auth';
+import { DummyAuthUser } from '@/services/api/auth/authApi';
+import { UserProfile } from '@/types/auth';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { username, password } = body;
 
-    if (!email || !password) {
+    if (!username || !password) {
       return NextResponse.json(
-        { success: false, message: 'Email dan password wajib diisi' },
+        { success: false, message: 'Username dan password wajib diisi' },
         { status: 400 }
       );
     }
 
-    const user = findUserByEmail(email);
+    // Hit ke DummyJSON Auth Login API menggunakan Axios di sisi server
+    const response = await axios.post<DummyAuthUser>(
+      'https://dummyjson.com/auth/login',
+      {
+        username,
+        password,
+        expiresInMins: 60, // Sesi token 60 menit
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
 
-    if (!user || user.passwordHash !== password) {
-      return NextResponse.json(
-        { success: false, message: 'Email atau password salah' },
-        { status: 401 }
-      );
-    }
+    const dummyUser = response.data;
 
-    const safeUser = getUserWithoutPassword(user);
-
-    // Payload token sederhana (di production gunakan JWT signed token)
-    const tokenPayload = {
-      userId: safeUser.id,
-      email: safeUser.email,
-      role: safeUser.role,
-      name: safeUser.name,
-      exp: Date.now() + 24 * 60 * 60 * 1000,
+    // DATA NORMAL: Informasi profil publik untuk ditampilkan ke UI & disimpan di Zustand
+    const normalUserData: UserProfile = {
+      id: dummyUser.id,
+      username: dummyUser.username,
+      name: `${dummyUser.firstName} ${dummyUser.lastName}`,
+      email: dummyUser.email,
+      firstName: dummyUser.firstName,
+      lastName: dummyUser.lastName,
+      gender: dummyUser.gender,
+      avatar: dummyUser.image,
+      role: 'admin', // DummyJSON roles
     };
 
-    const token = Buffer.from(JSON.stringify(tokenPayload)).toString('base64');
-
-    // Simpan ke Secure Cookie
+    // DATA RAHASIA: Simpan accessToken & refreshToken ke HttpOnly Cookies
+    // Token ini kebal XSS (tidak bisa diakses JavaScript di browser)
     const cookieStore = await cookies();
+
+    // 1. Simpan Access Token
     cookieStore.set({
       name: AUTH_COOKIE_NAME,
-      value: token,
-      httpOnly: true, // Tidak bisa diakses oleh JavaScript di browser (XSS protection)
-      secure: process.env.NODE_ENV === 'production', // Hanya HTTPS saat production
-      sameSite: 'lax', // Proteksi CSRF
+      value: dummyUser.accessToken,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24, // Berlaku 1 hari (dalam detik)
+      maxAge: 60 * 60, // 60 menit
     });
+
+    // 2. Simpan Refresh Token
+    if (dummyUser.refreshToken) {
+      cookieStore.set({
+        name: REFRESH_COOKIE_NAME,
+        value: dummyUser.refreshToken,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 7 hari
+      });
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Login berhasil',
-      user: safeUser,
+      message: 'Login berhasil via DummyJSON',
+      user: normalUserData,
     });
-  } catch (error) {
-    console.error('Login error:', error);
+  } catch (error: any) {
+    console.error('Login error DummyJSON:', error?.response?.data || error?.message);
+    const apiError = error?.response?.data?.message || 'Username atau password salah!';
     return NextResponse.json(
-      { success: false, message: 'Terjadi kesalahan pada server' },
-      { status: 500 }
+      { success: false, message: apiError },
+      { status: error?.response?.status || 401 }
     );
   }
 }
-

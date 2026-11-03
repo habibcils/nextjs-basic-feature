@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   Table,
   Button,
   Input,
-  Select,
   Tag,
   Space,
   Modal,
@@ -17,85 +16,66 @@ import {
   Row,
   Col,
   App,
+  Alert,
 } from 'antd';
 import {
   UserAddOutlined,
   SearchOutlined,
   EditOutlined,
   DeleteOutlined,
+  ReloadOutlined,
+  PhoneOutlined,
+  MailOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { usersApi, DummyUserItem } from '@/services/api/users/usersApi';
+import axios from 'axios';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
-
-interface UserItem {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'staff' | 'user';
-  status: 'aktif' | 'nonaktif';
-  avatar: string;
-  createdAt: string;
-}
-
-const initialUsers: UserItem[] = [
-  {
-    id: 'usr_1',
-    name: 'Ahmad Habib',
-    email: 'admin@example.com',
-    role: 'admin',
-    status: 'aktif',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ahmad',
-    createdAt: '10 Jan 2025',
-  },
-  {
-    id: 'usr_2',
-    name: 'Siti Nurhaliza',
-    email: 'staff@example.com',
-    role: 'staff',
-    status: 'aktif',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Siti',
-    createdAt: '15 Feb 2025',
-  },
-  {
-    id: 'usr_3',
-    name: 'Dimas Anggara',
-    email: 'dimas@example.com',
-    role: 'user',
-    status: 'aktif',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dimas',
-    createdAt: '01 Mar 2025',
-  },
-  {
-    id: 'usr_4',
-    name: 'Rina Kusuma',
-    email: 'rina@example.com',
-    role: 'user',
-    status: 'nonaktif',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rina',
-    createdAt: '12 Apr 2025',
-  },
-  {
-    id: 'usr_5',
-    name: 'Bayu Prakoso',
-    email: 'bayu@example.com',
-    role: 'staff',
-    status: 'aktif',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bayu',
-    createdAt: '22 Mei 2025',
-  },
-];
 
 export default function UsersPage() {
   const { message } = App.useApp();
-  const [users, setUsers] = useState<UserItem[]>(initialUsers);
+  const [users, setUsers] = useState<DummyUserItem[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [searchText, setSearchText] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<DummyUserItem | null>(null);
   const [form] = Form.useForm();
+
+  const fetchUsers = async (query = '') => {
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      // Hit endpoint dummyjson.com/users menggunakan usersApi (Axios)
+      const data = query.trim()
+        ? await usersApi.searchUsers(query)
+        : await usersApi.getUsers(8, 0);
+
+      setUsers(data.users);
+      setTotalUsers(data.total);
+    } catch (err: any) {
+      if (axios.isCancel(err)) {
+        console.log('🛑 Request usersApi dibatalkan karena ganti page');
+        return;
+      }
+      console.error('Error fetching users:', err);
+      setErrorMsg('Gagal memuat pengguna dari DummyJSON.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers(searchText);
+  }, []);
+
+  const handleSearch = () => {
+    fetchUsers(searchText);
+  };
 
   const handleOpenAddModal = () => {
     setEditingUser(null);
@@ -103,13 +83,18 @@ export default function UsersPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (user: UserItem) => {
+  const handleOpenEditModal = (user: DummyUserItem) => {
     setEditingUser(user);
-    form.setFieldsValue(user);
+    form.setFieldsValue({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+    });
     setIsModalOpen(true);
   };
 
-  const handleDeleteUser = (id: string) => {
+  const handleDeleteUser = (id: number) => {
     setUsers((prev) => prev.filter((u) => u.id !== id));
     message.success('Pengguna berhasil dihapus');
   };
@@ -123,14 +108,22 @@ export default function UsersPage() {
         );
         message.success('Data pengguna berhasil diperbarui');
       } else {
-        const newUser: UserItem = {
-          id: `usr_${Date.now()}`,
-          name: values.name,
+        const newUser: DummyUserItem = {
+          id: Date.now(),
+          firstName: values.firstName,
+          lastName: values.lastName,
+          username: `${values.firstName.toLowerCase()}_${Date.now().toString().slice(-4)}`,
           email: values.email,
-          role: values.role,
-          status: values.status || 'aktif',
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(values.name)}`,
-          createdAt: 'Hari ini',
+          phone: values.phone || '-',
+          gender: 'other',
+          age: 28,
+          role: 'admin',
+          image: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(values.firstName)}`,
+          company: {
+            name: 'DummyJSON Corp',
+            title: 'Developer',
+            department: 'Engineering',
+          },
         };
         setUsers((prev) => [newUser, ...prev]);
         message.success('Pengguna baru berhasil ditambahkan');
@@ -141,61 +134,56 @@ export default function UsersPage() {
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch =
-      u.name.toLowerCase().includes(searchText.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchText.toLowerCase());
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
-
-  const columns: ColumnsType<UserItem> = [
+  const columns: ColumnsType<DummyUserItem> = [
     {
-      title: 'Pengguna',
-      dataIndex: 'name',
+      title: 'Pengguna DummyJSON',
+      dataIndex: 'firstName',
       key: 'name',
       render: (_, record) => (
         <Space size={12}>
-          <Avatar src={record.avatar} size="large" />
+          <Avatar src={record.image} size="large" />
           <div>
             <Text strong style={{ display: 'block' }}>
-              {record.name}
+              {record.firstName} {record.lastName}
             </Text>
-            <Text type="secondary" style={{ fontSize: 13 }}>
-              {record.email}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              @{record.username}
             </Text>
           </div>
         </Space>
       ),
     },
     {
-      title: 'Peran (Role)',
-      dataIndex: 'role',
-      key: 'role',
-      render: (role: UserItem['role']) => {
-        const colorMap = {
-          admin: 'blue',
-          staff: 'cyan',
-          user: 'default',
-        };
-        return <Tag color={colorMap[role]}>{role.toUpperCase()}</Tag>;
-      },
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: UserItem['status']) => (
-        <Tag color={status === 'aktif' ? 'success' : 'error'}>
-          {status === 'aktif' ? 'Aktif' : 'Nonaktif'}
-        </Tag>
+      title: 'Kontak',
+      key: 'contact',
+      render: (_, record) => (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MailOutlined style={{ color: '#1677ff', fontSize: 12 }} />
+            <Text style={{ fontSize: 13 }}>{record.email}</Text>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <PhoneOutlined style={{ color: '#52c41a', fontSize: 12 }} />
+            <Text type="secondary" style={{ fontSize: 12 }}>{record.phone}</Text>
+          </div>
+        </div>
       ),
     },
     {
-      title: 'Bergabung Pada',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (date) => <Text type="secondary">{date}</Text>,
+      title: 'Perusahaan & Posisi',
+      key: 'company',
+      render: (_, record) => (
+        <div>
+          <Text strong style={{ fontSize: 13, display: 'block' }}>{record.company?.name || 'DummyJSON Org'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{record.company?.title || record.role || 'Member'}</Text>
+        </div>
+      ),
+    },
+    {
+      title: 'Peran',
+      dataIndex: 'role',
+      key: 'role',
+      render: (role) => <Tag color="blue">{(role || 'USER').toUpperCase()}</Tag>,
     },
     {
       title: 'Aksi',
@@ -211,7 +199,7 @@ export default function UsersPage() {
           </Button>
           <Popconfirm
             title="Hapus Pengguna"
-            description={`Apakah yakin ingin menghapus ${record.name}?`}
+            description={`Apakah yakin ingin menghapus ${record.firstName}?`}
             onConfirm={() => handleDeleteUser(record.id)}
             okText="Ya, Hapus"
             cancelText="Batal"
@@ -232,53 +220,55 @@ export default function UsersPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <Title level={4} style={{ margin: 0 }}>
-            Manajemen Pengguna
+            Manajemen Pengguna (DummyJSON API)
           </Title>
           <Text type="secondary">
-            Kelola akses, peran, dan daftar pengguna yang terdaftar di dalam platform.
+            Daftar pengguna live yang diambil menggunakan konfigurasi khusus <code>usersApi.ts</code> via Axios.
           </Text>
         </div>
-        <Button
-          type="primary"
-          icon={<UserAddOutlined />}
-          size="large"
-          style={{ borderRadius: 8 }}
-          onClick={handleOpenAddModal}
-        >
-          Tambah Pengguna
-        </Button>
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => fetchUsers(searchText)}
+            loading={loading}
+          >
+            Segarkan
+          </Button>
+          <Button
+            type="primary"
+            icon={<UserAddOutlined />}
+            size="large"
+            style={{ borderRadius: 8 }}
+            onClick={handleOpenAddModal}
+          >
+            Tambah Pengguna
+          </Button>
+        </Space>
       </div>
+
+      {errorMsg && <Alert message={errorMsg} type="error" showIcon closable />}
 
       {/* Filter and Table Card */}
       <Card variant="borderless" style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-          <Col xs={24} sm={12} md={8}>
-            <Input
-              placeholder="Cari nama atau email..."
-              prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+          <Col xs={24} sm={16} md={10}>
+            <Input.Search
+              placeholder="Cari pengguna di DummyJSON..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
+              onSearch={handleSearch}
+              enterButton="Cari"
               allowClear
+              loading={loading}
             />
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <Select
-              value={roleFilter}
-              onChange={setRoleFilter}
-              style={{ width: '100%' }}
-            >
-              <Option value="all">Semua Peran (Role)</Option>
-              <Option value="admin">Administrator</Option>
-              <Option value="staff">Staff</Option>
-              <Option value="user">User Biasa</Option>
-            </Select>
           </Col>
         </Row>
 
         <Table
-          dataSource={filteredUsers}
+          dataSource={users}
           columns={columns}
           rowKey="id"
+          loading={loading}
           pagination={{ pageSize: 5 }}
           scroll={{ x: 700 }}
         />
@@ -290,7 +280,7 @@ export default function UsersPage() {
         open={isModalOpen}
         onOk={handleFormSubmit}
         onCancel={() => setIsModalOpen(false)}
-        okText={editingUser ? 'Simpan Perubahan' : 'Tambah'}
+        okText={editingUser ? 'Simpan' : 'Tambah'}
         cancelText="Batal"
         destroyOnHidden
       >
@@ -298,15 +288,27 @@ export default function UsersPage() {
           form={form}
           layout="vertical"
           name="userModalForm"
-          initialValues={{ role: 'user', status: 'aktif' }}
         >
-          <Form.Item
-            name="name"
-            label="Nama Lengkap"
-            rules={[{ required: true, message: 'Harap masukkan nama!' }]}
-          >
-            <Input placeholder="Contoh: Ahmad Habib" />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="firstName"
+                label="Nama Depan"
+                rules={[{ required: true, message: 'Harap masukkan nama depan!' }]}
+              >
+                <Input placeholder="Contoh: Emily" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="lastName"
+                label="Nama Belakang"
+                rules={[{ required: true, message: 'Harap masukkan nama belakang!' }]}
+              >
+                <Input placeholder="Contoh: Johnson" />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item
             name="email"
@@ -316,39 +318,17 @@ export default function UsersPage() {
               { type: 'email', message: 'Format email tidak valid!' },
             ]}
           >
-            <Input placeholder="Contoh: habib@example.com" />
+            <Input placeholder="Contoh: emily@dummyjson.com" />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="role"
-                label="Peran (Role)"
-                rules={[{ required: true }]}
-              >
-                <Select>
-                  <Option value="admin">Administrator</Option>
-                  <Option value="staff">Staff</Option>
-                  <Option value="user">User</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="status"
-                label="Status"
-                rules={[{ required: true }]}
-              >
-                <Select>
-                  <Option value="aktif">Aktif</Option>
-                  <Option value="nonaktif">Nonaktif</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
+          <Form.Item
+            name="phone"
+            label="Nomor Telepon"
+          >
+            <Input placeholder="Contoh: +1 812-421-1234" />
+          </Form.Item>
         </Form>
       </Modal>
     </div>
   );
 }
-

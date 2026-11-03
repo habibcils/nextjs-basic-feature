@@ -2,10 +2,12 @@
 
 import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Form, Input, Button, Card, Typography, Alert, Space, Divider, Spin, App } from 'antd';
-import { UserOutlined, LockOutlined, LoginOutlined, SafetyCertificateOutlined, CheckCircleFilled } from '@ant-design/icons';
+import { Form, Input, Button, Card, Typography, Alert, Space, Divider, Spin, App, Tag } from 'antd';
+import { UserOutlined, LockOutlined, LoginOutlined, SafetyCertificateOutlined, CheckCircleFilled, ApiOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/useAuthStore';
-import { LoginCredentials } from '@/types/auth';
+import { LoginPayload } from '@/types/auth';
+import { DUMMYJSON_DEMO_ACCOUNTS } from '@/lib/auth';
+import axios from 'axios';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -15,49 +17,44 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
-  const [form] = Form.useForm<LoginCredentials>();
+  const [form] = Form.useForm<LoginPayload>();
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const setUser = useAuthStore((state) => state.setUser);
 
-  const onFinish = async (values: LoginCredentials) => {
+  const onFinish = async (values: LoginPayload) => {
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      });
+      // Hit endpoint internal Next.js menggunakan Axios
+      const response = await axios.post('/api/auth/login', values);
+      const data = response.data;
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setErrorMessage(data.message || 'Login gagal, periksa email dan password.');
+      if (!data.success) {
+        setErrorMessage(data.message || 'Login gagal, periksa username dan password.');
         return;
       }
 
-      // Update state di Zustand
+      // Simpan data normal ke Zustand store (yang otomatis dipersist ke LocalStorage)
       setUser(data.user);
 
       message.success(`Selamat datang, ${data.user.name}!`);
       router.push(callbackUrl);
       router.refresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saat login:', err);
-      setErrorMessage('Terjadi kesalahan jaringan atau server');
+      const errMsg = err?.response?.data?.message || 'Username atau kata sandi tidak valid.';
+      setErrorMessage(errMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFillDemo = (email: string, pass: string) => {
+  const handleFillDemo = (username: string, pass: string) => {
     form.setFieldsValue({
-      email,
+      username,
       password: pass,
     });
     setErrorMessage(null);
@@ -70,21 +67,21 @@ function LoginForm() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #091e3a 0%, #2f80ed 50%, #2d9ee0 100%)',
+        background: 'linear-gradient(135deg, #091e3a 0%, #1e40af 50%, #0369a1 100%)',
         padding: '24px 16px',
       }}
     >
       <Card
         style={{
           width: '100%',
-          maxWidth: 440,
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
+          maxWidth: 460,
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
           borderRadius: 16,
           border: 'none',
         }}
         styles={{ body: { padding: '36px 32px' } }}
       >
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div
             style={{
               display: 'inline-flex',
@@ -93,20 +90,22 @@ function LoginForm() {
               width: 56,
               height: 56,
               borderRadius: '50%',
-              backgroundColor: '#e6f4ff',
-              color: '#1677ff',
-              fontSize: 28,
+              backgroundColor: '#e0f2fe',
+              color: '#0284c7',
+              fontSize: 26,
               marginBottom: 12,
             }}
           >
-            <SafetyCertificateOutlined />
+            <ApiOutlined />
           </div>
           <Title level={3} style={{ margin: 0, fontWeight: 700 }}>
-            Learn Next.js Admin
+            DummyJSON Auth Portal
           </Title>
-          <Text type="secondary" style={{ fontSize: 14 }}>
-            Silakan login untuk masuk ke dashboard
-          </Text>
+          <div style={{ marginTop: 4 }}>
+            <Tag color="cyan">Axios HTTP Client</Tag>
+            <Tag color="blue">Secure HttpOnly Cookie</Tag>
+            <Tag color="purple">Zustand Persist</Tag>
+          </div>
         </div>
 
         {errorMessage && (
@@ -129,16 +128,13 @@ function LoginForm() {
           autoComplete="off"
         >
           <Form.Item
-            name="email"
-            label={<Text strong>Alamat Email</Text>}
-            rules={[
-              { required: true, message: 'Harap masukkan email Anda!' },
-              { type: 'email', message: 'Format email tidak valid!' },
-            ]}
+            name="username"
+            label={<Text strong>Username DummyJSON</Text>}
+            rules={[{ required: true, message: 'Harap masukkan username!' }]}
           >
             <Input
               prefix={<UserOutlined style={{ color: '#bfbfbf' }} />}
-              placeholder="nama@example.com"
+              placeholder="Contoh: emilys"
               size="large"
             />
           </Form.Item>
@@ -150,7 +146,7 @@ function LoginForm() {
           >
             <Input.Password
               prefix={<LockOutlined style={{ color: '#bfbfbf' }} />}
-              placeholder="Masukkan kata sandi"
+              placeholder="Contoh: emilyspass"
               size="large"
             />
           </Form.Item>
@@ -169,58 +165,44 @@ function LoginForm() {
                 borderRadius: 8,
               }}
             >
-              Masuk ke Akun
+              Masuk ke Sistem
             </Button>
           </Form.Item>
         </Form>
 
         <Divider plain style={{ fontSize: 12, color: '#8c8c8c', margin: '20px 0 16px' }}>
-          Akun Demo Cepat (Klik untuk isi)
+          Akun Demo DummyJSON (Klik untuk Mengisi)
         </Divider>
 
         <Space orientation="vertical" style={{ width: '100%' }} size={10}>
-          <Button
-            block
-            size="middle"
-            onClick={() => handleFillDemo('admin@example.com', 'admin123')}
-            style={{ textAlign: 'left', height: 'auto', padding: '10px 14px' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <Text strong style={{ fontSize: 13, display: 'block' }}>
-                  Akun Administrator
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  admin@example.com (Pass: admin123)
-                </Text>
+          {DUMMYJSON_DEMO_ACCOUNTS.map((acc) => (
+            <Button
+              key={acc.username}
+              block
+              size="middle"
+              onClick={() => handleFillDemo(acc.username, acc.password)}
+              style={{ textAlign: 'left', height: 'auto', padding: '10px 14px' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Text strong style={{ fontSize: 13, display: 'block' }}>
+                    {acc.name} ({acc.role})
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    User: <code>{acc.username}</code> • Pass: <code>{acc.password}</code>
+                  </Text>
+                </div>
+                <CheckCircleFilled style={{ color: '#10b981' }} />
               </div>
-              <CheckCircleFilled style={{ color: '#52c41a' }} />
-            </div>
-          </Button>
-
-          <Button
-            block
-            size="middle"
-            onClick={() => handleFillDemo('staff@example.com', 'staff123')}
-            style={{ textAlign: 'left', height: 'auto', padding: '10px 14px' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <Text strong style={{ fontSize: 13, display: 'block' }}>
-                  Akun Staff
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  staff@example.com (Pass: staff123)
-                </Text>
-              </div>
-              <CheckCircleFilled style={{ color: '#1677ff' }} />
-            </div>
-          </Button>
+            </Button>
+          ))}
         </Space>
 
         <div style={{ textAlign: 'center', marginTop: 20 }}>
           <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>
-            Dilindungi oleh <strong>Secure HttpOnly Cookies</strong> & Zustand State
+            🔒 Token JWT rahasia disimpan di <strong>HttpOnly Cookie</strong>.
+            <br />
+            💾 Profil normal dipersist di <strong>Zustand Store</strong> (tahan hard reload).
           </Paragraph>
         </div>
       </Card>
@@ -241,4 +223,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
